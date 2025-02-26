@@ -18,7 +18,7 @@ import com.courier.userservice.objects.dto.RoleDto;
 import com.courier.userservice.service.RoleService;
 
 @RestController
-@RequestMapping("/api/courier/role")
+@RequestMapping("/api/user/role")
 public class RoleController {
 
   @Autowired private RoleService roleService;

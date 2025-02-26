@@ -21,7 +21,7 @@ import com.courier.userservice.objects.dto.UserDto;
 import com.courier.userservice.service.UserService;
 
 @RestController
-@RequestMapping("/api/courier/user")
+@RequestMapping("/api/user")
 public class UserController {
 
   @Autowired private UserService userService;
