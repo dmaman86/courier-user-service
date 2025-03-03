@@ -1,13 +1,14 @@
 package com.courier.userservice.feignclient;
 
-import java.nio.file.AccessDeniedException;
-
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
+
+import com.courier.userservice.exception.BusinessException;
+import com.courier.userservice.exception.EntityExistsException;
+import com.courier.userservice.exception.EntityNotFoundException;
 
 import feign.Response;
 import feign.codec.ErrorDecoder;
-import jakarta.persistence.EntityExistsException;
-import jakarta.persistence.EntityNotFoundException;
 
 @Component
 public class FeignErrorDecoder implements ErrorDecoder {
@@ -21,7 +22,7 @@ public class FeignErrorDecoder implements ErrorDecoder {
 
     switch (response.status()) {
       case 400:
-        return new RuntimeException("Bad Request: " + errorMessage);
+        return new BusinessException("Bad Request: " + errorMessage);
       case 403:
         return new AccessDeniedException("Access Denied: " + errorMessage);
       case 404:

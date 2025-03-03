@@ -1,6 +1,6 @@
 package com.courier.userservice.objects.dto;
 
-import java.util.Set;
+import java.util.Collection;
 
 import org.springframework.security.core.GrantedAuthority;
 
@@ -17,5 +17,5 @@ public class UserContext {
   private String fullName;
   private String email;
   private String phoneNumber;
-  private Set<GrantedAuthority> roles;
+  private Collection<? extends GrantedAuthority> authorities;
 }

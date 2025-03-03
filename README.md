@@ -2,19 +2,21 @@
 
 ## Description
 
-The **Courier User Service** is a microservice responsible for managing users and roles within
-the application. It handles authentication, authorization, and integrates with the
-`resource-service` for managing users of type `client`.
+The **Courier User Service** is a micro-service responsible for managing users and roles in the `Courier system`. It provides APIs for creating, updating, deleting, and retrieving user information. This service communicates with others services via `OpenFeign` and `Kafka`, and uses `JWT` for authentication and authorization.
 
 ---
 
 ## Features
 
-- User creation, update, and deactivation
-- Role management with uniqueness validations and permission control.
-- Integration with `resource-service` via OpenFeign for `client` management.
-- JWT token validation for authentication and authorization.
-- `Spring Security` implementation for securing endpoints.
+- **User Management**: Create, update, delete, and retrieve user information.
+- **Role Management**: Create, update, delete, and retrieve role information.
+- **Client Integration**: Users with the `client` role are linked to contacts in `courier-resource-service`.
+- **Security**: Uses `JWT` authentication for secure API access.
+- **User Blacklist**: Deleted users are added to a Redis blacklist to prevent further access while logged in.
+- **Kafka Notifications**: Notifies `courier-auth-service` when a user is created or deleted.
+- **API Key Authentication**: The endpoint `/api/user/find-by-email-or-phone` requires an API key for access.
+- **Service Discovery**: Registers with `Eureka` for service discovery.
+- **Error Handling**: Errors sent to `courier-error-service` for logging, include a severity level (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) based on the exception type.
 
 ---
 
@@ -24,10 +26,12 @@ the application. It handles authentication, authorization, and integrates with t
 - **Spring Boot 3**
 - **Spring Security**
 - **Spring Data JPA** (with MySQL)
-- **Spring Cloud OpenFeign**
+- **Spring Cloud (Eureka, OpenFeign)**
 - **Lombok**
 - **MapStruct** for DTO mapping
 - **JWT (JSON Web Token)**
+- **Kafka**
+- **Redis**
 
 ---
 
@@ -72,10 +76,10 @@ This service uses `JWT` for authentication and authorization.
 
 ## Integration with `resource-service`
 
-`UserService` communicates with the `resource-service` for managing `client` using `OpenFeign`.
+`Courier user service` communicates with the `courier-resource-service` for managing `client` using `OpenFeign`.
 
 ```java
-@FeignClient(name = "resource-service", configuration = FeignClientConfig.class)
+@FeignClient(name = "courier-resource-service", configuration = FeignClientConfig.class)
 public interface ResourceFeignClient {
 
   @PostMapping("/api/courier/resource/contact")
@@ -87,6 +91,9 @@ public interface ResourceFeignClient {
   @DeleteMapping("/api/courier/resource/contact/{id}")
   void disableContact(@PathVariable Long id);
 
+  @PostMapping("/api/courier/resource/contact/enable")
+  ContactDto enableContact(@RequestBody ContactDto contactDto);
+
   @GetMapping("/api/courier/resource/contact/phone/{phoneNumber}")
   ContactDto getContactByPhone(@PathVariable String phoneNumber);
 }
@@ -96,37 +103,56 @@ public interface ResourceFeignClient {
 
 ## Key Endpoints
 
-### `UserController`
+### User Endpoints
 
-| Method   | Endpoint                               | Description                                                                                   |
-| -------- | -------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/courier/user`                    | Get all users (paginated).                                                                    |
-| `GET`    | `/api/courier/user/all`                | Get all users (non-paginated).                                                                |
-| `GET`    | `/api/courier/user/{userId}`           | Get user by ID (Admins, Couriers can view any user; Clients can only view their own profile). |
-| `POST`   | `/api/courier/user`                    | Create a new user (admin/courier/client).                                                     |
-| `PUT`    | `/api/courier/user/{userId}`           | Update an existing user.                                                                      |
-| `DELETE` | `/api/courier/user/{userId}`           | Disable a user (only `admin`).                                                                |
-| `GET`    | `/api/courier/user/search?search=text` | Search users by fullName, phoneNumber, email, roles.                                          |
+| Method | Endpoint                           | Description                                                    | Access                                             |
+| ------ | ---------------------------------- | -------------------------------------------------------------- | -------------------------------------------------- |
+| GET    | `/api/user`                        | Retrieve paginated users                                       | `ROLE_ADMIN`                                       |
+| GET    | `/api/user/all`                    | Retrieve all users                                             | `ROLE_ADMIN`                                       |
+| GET    | `/api/user/{userId}`               | Retrieve user details                                          | `ROLE_ADMIN`, `ROLE_COURIER`, `ROLE_CLIENT` (self) |
+| POST   | `/api/user`                        | Create a new user                                              | `ROLE_ADMIN`                                       |
+| PUT    | `/api/user/{userId}`               | Update user details                                            | `ROLE_ADMIN`                                       |
+| DELETE | `/api/user/{userId}`               | Disable a user (adds to blacklist and notifies `auth-service`) | `ROLE_ADMIN`                                       |
+| GET    | `/api/user/find-by-email-or-phone` | Retrieve user by email or phone (requires API Key)             | Public                                             |
+| GET    | `/api/user/search`                 | Search users with pagination                                   | `ROLE_ADMIN`                                       |
 
-### `RoleController`
+### Role Endpoints
 
-| Method   | Endpoint                     | Description                                                          |
-| -------- | ---------------------------- | -------------------------------------------------------------------- |
-| `GET`    | `/api/courier/role/all`      | Get all roles.                                                       |
-| `GET`    | `/api/courier/role/{roleId}` | Get a role by ID.                                                    |
-| `POST`   | `/api/courier/role`          | Create a new role.                                                   |
-| `PUT`    | `/api/courier/role/{roleId}` | Update an existing role.                                             |
-| `DELETE` | `/api/courier/role/{roleId}` | Disable a role (only if it is not the only role assigned to a user). |
+| Method | Endpoint                  | Description                                       | Access       |
+| ------ | ------------------------- | ------------------------------------------------- | ------------ |
+| GET    | `/api/user/role/all`      | Retrieve all roles                                | `ROLE_ADMIN` |
+| GET    | `/api/user/role/{roleId}` | Retrieve role details                             | `ROLE_ADMIN` |
+| POST   | `/api/user/role`          | Create a new role                                 | `ROLE_ADMIN` |
+| PUT    | `/api/user/role/{roleId}` | Update role details                               | `ROLE_ADMIN` |
+| DELETE | `/api/user/role/{roleId}` | Disable a role (if not assigned as the only role) | `ROLE_ADMIN` |
 
 ---
 
-## Client Creation Flow
+## Client Handling
 
-1. **A `ClientDto` is sento to `/api/courier/user`**.
-2. **The system validates if the user already exists (unique email/phone check).**
-3. **If it is a `client`, a `ContactDto` is sento to `resource-service`.**
-4. **The user is saved in the database.**
-5. **A `ClientDto` with complete details is returned.**
+- When a user with `ROLE_CLIENT` is created, a corresponding contact is created in `resource-service`.
+- If a `CLIENT` role is removed, the contact is disabled in `resource-service`.
+- If `resource-service` fails during client deletion, `user-service` sends a `CRITICAL` severity error to `error-service` for manual handling.
+
+## Security
+
+- **JWT-based authentication**: Uses a token extracted from cookies.
+- **User Blacklist**: Deleted users are added to Redis blacklist and blocked at authentication level.
+- **API Key Authentication**: Requests to `/api/user/find-by-email-or-phone` require a valid API key.
+- **Role-based access control**: Enforced using `@PreAuthorize` annotations.
+
+## Kafka Integration
+
+- Sends error logs to `error-service`, including severity levels (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) based on the exception type.
+- Listens for public key updates from `auth-service`.
+- Notifies `auth-service` when a user is created or deleted.
+- Sends `CRITICAL` severity error to `error-service` if `resource-service` fails during client deletion.
+
+## Filters
+
+- **JwtAuthenticationFilter**: Extracts and validates JWT from cookies, checks if the user is blacklisted.
+- **ApiKeyFilter**: Validates API Key for requests to `/api/user/find-by-email-or-phone`.
+- **ExceptionHandlerFilter**: Catches and processes exceptions globally.
 
 ---
 
@@ -190,18 +216,29 @@ eureka:
 
 ---
 
-## Running the Project
+## Setup & Running
 
-1. Ensure that `MySQL` and `Kafka` are running.
-2. Register `user-service` with `Eureka` if using service discovery.
-3. Compile and run the application:
+### Prerequisites
+
+- Java 17
+- MySQL
+- Kafka running for event handling.
+- Redis for user blacklist.
+- Eureka server running for service discovery.
+
+### Clone the Repository
+
+```sh
+git clone https://github.com/dmaman86/courier-user-service.git
+cd courier-user-service
+```
+
+### Build and Run
 
 ```sh
 mvn clean install
 mvn spring-boot:run
 ```
-
-4. The service will be available at `http://localhost:8084`.
 
 ---
 

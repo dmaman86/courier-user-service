@@ -1,4 +1,4 @@
-package com.courier.userservice.config;
+package com.courier.userservice.config.kafka;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -14,7 +14,7 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 
-import com.courier.userservice.objects.dto.PublicKeyDto;
+import com.courier.userservice.objects.dto.AuthInfoDto;
 
 @EnableKafka
 @Configuration
@@ -27,7 +27,7 @@ public class KafkaConsumerConfig {
   private String groupId;
 
   @Bean
-  public ConsumerFactory<String, PublicKeyDto> consumerFactory() {
+  public ConsumerFactory<String, AuthInfoDto> consumerFactory() {
     Map<String, Object> config = new HashMap<>();
 
     config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -40,9 +40,9 @@ public class KafkaConsumerConfig {
   }
 
   @Bean
-  public ConcurrentKafkaListenerContainerFactory<String, PublicKeyDto>
+  public ConcurrentKafkaListenerContainerFactory<String, AuthInfoDto>
       kafkaListenerContainerFactory() {
-    ConcurrentKafkaListenerContainerFactory<String, PublicKeyDto> factory =
+    ConcurrentKafkaListenerContainerFactory<String, AuthInfoDto> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(consumerFactory());
     return factory;

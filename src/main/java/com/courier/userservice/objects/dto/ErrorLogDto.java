@@ -2,6 +2,10 @@ package com.courier.userservice.objects.dto;
 
 import java.time.LocalDateTime;
 
+import com.courier.userservice.objects.enums.ErrorSeverity;
+
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.Builder;
 import lombok.Data;
 
@@ -15,4 +19,7 @@ public class ErrorLogDto {
   private String message;
   private String path;
   private String exception;
+
+  @Enumerated(EnumType.STRING)
+  private ErrorSeverity severity;
 }

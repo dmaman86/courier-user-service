@@ -65,6 +65,12 @@ public class UserController {
     return ResponseEntity.noContent().build();
   }
 
+  @GetMapping("/find-by-email-or-phone")
+  public ResponseEntity<UserDto> getUserByEmailOrPhone(
+      @RequestParam String email, @RequestParam String phone) {
+    return ResponseEntity.ok(userService.getUserByEmailOrPhone(email, phone));
+  }
+
   @GetMapping("/search")
   public ResponseEntity<Page<UserDto>> searchUsers(@RequestParam String search, Pageable pageable) {
     return ResponseEntity.ok(userService.searchUsers(search, pageable));

@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import com.courier.userservice.objects.dto.ContactDto;
 
-@FeignClient(name = "resource-service", configuration = FeignClientConfig.class)
+@FeignClient(name = "courier-resource-service", configuration = FeignClientConfig.class)
 public interface ResourceFeignClient {
 
   @PostMapping("/api/courier/resource/contact")
@@ -20,6 +20,9 @@ public interface ResourceFeignClient {
 
   @DeleteMapping("/api/courier/resource/contact/{id}")
   void disableContact(@PathVariable Long id);
+
+  @PostMapping("/api/courier/resource/contact/enable")
+  ContactDto enableContact(@RequestBody ContactDto contactDto);
 
   @GetMapping("/api/courier/resource/contact/phone/{phoneNumber}")
   ContactDto getContactByPhone(@PathVariable String phoneNumber);

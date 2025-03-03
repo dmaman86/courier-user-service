@@ -9,8 +9,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PublicKeyDto {
+public class AuthInfoDto {
 
   private String publicKey;
-  private long expirationTime;
+  private String authServiceSecret;
 }

@@ -1,4 +1,4 @@
-package com.courier.userservice.config;
+package com.courier.userservice.config.filters;
 
 import java.io.IOException;
 
