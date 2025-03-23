@@ -10,12 +10,15 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
 import com.courier.userservice.exception.PublicKeyException;
+import com.courier.userservice.exception.TokenValidationException;
 import com.courier.userservice.objects.dto.UserContext;
 
 import io.jsonwebtoken.Claims;
@@ -23,6 +26,8 @@ import io.jsonwebtoken.Jwts;
 
 @Service
 public class JwtService {
+
+  private static final Logger logger = LoggerFactory.getLogger(JwtService.class);
 
   @Autowired private RedisService redisService;
 
@@ -59,15 +64,27 @@ public class JwtService {
   }
 
   private Claims parseTokenClaims(String token) {
-    return Jwts.parserBuilder()
-        .setSigningKey(getPublicKey())
-        .build()
-        .parseClaimsJws(token)
-        .getBody();
+    List<String> publicKeys = redisService.getPublicKeys();
+
+    for (String publicKeyStr : publicKeys) {
+      try {
+        PublicKey publicKey = getPublicKey(publicKeyStr);
+
+        return Jwts.parserBuilder()
+            .setSigningKey(publicKey)
+            .build()
+            .parseClaimsJws(token)
+            .getBody();
+
+      } catch (Exception e) {
+        logger.warn("Signature failed with public key, trying next key...");
+      }
+    }
+    logger.error("No valid public key found to verify signature");
+    throw new TokenValidationException("Token could not be validated against active public keys");
   }
 
-  private PublicKey getPublicKey() {
-    String publicKeyStr = redisService.getPublicKey();
+  private PublicKey getPublicKey(String publicKeyStr) {
     if (publicKeyStr == null) {
       throw new PublicKeyException("Public key has not been set yet.");
     }

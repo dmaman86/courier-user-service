@@ -11,7 +11,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import com.courier.userservice.config.filters.ApiKeyFilter;
 import com.courier.userservice.config.filters.ExceptionHandlerFilter;
 import com.courier.userservice.config.filters.JwtAuthenticationFilter;
 
@@ -24,8 +23,6 @@ public class SecurityConfig {
 
   @Autowired private ExceptionHandlerFilter exceptionHandlerFilter;
 
-  @Autowired private ApiKeyFilter apiKeyFilter;
-
   @Bean
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
     http.csrf(AbstractHttpConfigurer::disable)
@@ -37,9 +34,8 @@ public class SecurityConfig {
                     .permitAll()
                     .anyRequest()
                     .authenticated())
-        .addFilterBefore(exceptionHandlerFilter, JwtAuthenticationFilter.class)
-        .addFilterBefore(apiKeyFilter, JwtAuthenticationFilter.class)
-        .addFilterAfter(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterBefore(exceptionHandlerFilter, JwtAuthenticationFilter.class);
 
     return http.build();
   }

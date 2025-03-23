@@ -165,8 +165,8 @@ spring:
 
   datasource:
     url: jdbc:mysql://localhost:3306/user_db?useSSL=false&createDatabaseIfNotExist=true&serverTimezone=UTC
-    username: your-username
-    password: your-password
+    username: root
+    password: root-workbench
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -188,6 +188,10 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.StringSerializer
+
+  redis:
+    host: localhost
+    port: 6379
 
   cloud:
     openfeign:

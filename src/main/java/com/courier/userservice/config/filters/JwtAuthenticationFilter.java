@@ -3,13 +3,15 @@ package com.courier.userservice.config.filters;
 import java.io.IOException;
 import java.nio.file.AccessDeniedException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.courier.userservice.exception.PublicKeyException;
+import com.courier.userservice.exception.UnauthorizedException;
 import com.courier.userservice.objects.dto.UserContext;
 import com.courier.userservice.service.BlackListService;
 import com.courier.userservice.service.JwtService;
@@ -24,6 +26,7 @@ import jakarta.servlet.http.HttpServletResponse;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+  private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
   @Autowired private JwtService jwtService;
 
   @Autowired private RedisService redisService;
@@ -34,13 +37,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
 
-    if (!redisService.hasValidPublicKey()) {
-      throw new PublicKeyException("Public key is not set in Redis");
+    if (!redisService.hasKeys()) throw new UnauthorizedException("Public key not loaded");
+
+    if (request.getRequestURI().equals("/api/user/find-by-email-or-phone")) {
+      String requestApiKey = request.getHeader("X-Api-Key");
+      String storedApiKey = redisService.getAuthServiceSecret();
+
+      if (!storedApiKey.equals(requestApiKey)) {
+        throw new UnauthorizedException("Invalid API Key for auth-service");
+      }
+      filterChain.doFilter(request, response);
+      return;
     }
 
     String token = extractTokenFromCookies(request);
     if (token != null && jwtService.isTokenValid(token)) {
       UserContext user = jwtService.getUserContext(token);
+      logger.info("User {} is authenticated", user);
 
       if (blackListService.isUserBlackListed(user.getId())) {
         SecurityContextHolder.clearContext();
@@ -49,6 +62,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
       UsernamePasswordAuthenticationToken authentication =
           new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+
+      logger.info("Authenticated user: {}", authentication);
+
       SecurityContextHolder.getContext().setAuthentication(authentication);
     }
     filterChain.doFilter(request, response);

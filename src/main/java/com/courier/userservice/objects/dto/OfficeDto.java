@@ -1,6 +1,5 @@
 package com.courier.userservice.objects.dto;
 
-import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,5 +16,5 @@ public class OfficeDto {
 
   private Long id;
   private String name;
-  private List<BranchDto> branches;
+  // private List<BranchDto> branches;
 }

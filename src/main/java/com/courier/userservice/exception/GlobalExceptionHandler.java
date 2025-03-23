@@ -1,6 +1,7 @@
 package com.courier.userservice.exception;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,7 +82,8 @@ public class GlobalExceptionHandler {
       Exception ex, ErrorSeverity severity, HttpStatus status, WebRequest request) {
     ErrorLogDto errorLog =
         ErrorLogDto.builder()
-            .timestamp(LocalDateTime.now())
+            .timestamp(
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
             .status(status.value())
             .error(status.getReasonPhrase())
             .message(ex.getMessage())

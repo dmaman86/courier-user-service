@@ -22,6 +22,8 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
   Optional<User> findByEmailOrPhoneNumberAndEnabledTrue(String email, String phoneNumber);
 
+  Optional<User> findByEmailOrPhoneNumber(String email, String phoneNumber);
+
   Optional<User> findByPhoneNumberAndEnabledTrue(String phoneNumber);
 
   boolean existsByPhoneNumberAndEnabledTrue(String phoneNumber);
@@ -30,5 +32,5 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
   List<User> findByRolesIdAndEnabledTrue(Long roleId);
 
-  long countByRoles_IdAndRoles_Size(Long roleId, int size);
+  List<User> findByRolesNameAndEnabledTrue(String roleName);
 }

@@ -14,10 +14,11 @@ import com.courier.userservice.objects.dto.ClientDto;
 import com.courier.userservice.objects.dto.ContactDto;
 import com.courier.userservice.objects.dto.UserDto;
 import com.courier.userservice.objects.entity.User;
-import com.courier.userservice.objects.mapper.ClientMapper;
-import com.courier.userservice.objects.mapper.UserMapper;
+import com.courier.userservice.objects.mappers.ClientMapper;
+import com.courier.userservice.objects.mappers.UserMapper;
 import com.courier.userservice.repository.RoleRepository;
 import com.courier.userservice.repository.UserRepository;
+import com.courier.userservice.service.BlackListService;
 import com.courier.userservice.service.EventProducerService;
 
 @Component
@@ -34,6 +35,8 @@ public class UserManager {
   @Autowired private ResourceFeignClient resourceFeignClient;
 
   @Autowired private EventProducerService eventProducerService;
+
+  @Autowired private BlackListService blackListService;
 
   @Transactional(readOnly = true)
   public UserDto getUserById(Long userId) {
@@ -54,18 +57,81 @@ public class UserManager {
   public UserDto createUser(UserDto userDto) {
     validateUniqueFields(userDto);
     validateRoles(userDto);
-    UserDto savedUserDto = null;
 
-    if (!(userDto instanceof ClientDto)) {
-      User user = userRepository.save(userMapper.toEntity(userDto));
-      savedUserDto = userMapper.toDto(user);
-    } else {
-      savedUserDto = createClient(userDto);
-    }
+    User user =
+        User.builder()
+            .email(userDto.getEmail())
+            .phoneNumber(userDto.getPhoneNumber())
+            .fullName(userDto.getFullName())
+            .roles(userMapper.toEntity(userDto).getRoles())
+            .build();
 
+    UserDto savedUserDto = userMapper.toDto(userRepository.save(user));
     if (savedUserDto != null) eventProducerService.sendUserCreated(savedUserDto);
     return savedUserDto;
   }
+
+  @Transactional
+  public UserDto createClient(UserDto userDto, ContactDto contactDto) {
+    ContactDto newContact = resourceFeignClient.createContact(contactDto);
+
+    try {
+      UserDto savedUserDto = createUser(userDto);
+      return savedUserDto;
+    } catch (Exception e) {
+      resourceFeignClient.disableContact(newContact.getId());
+      throw new BusinessException("Failed to create client: " + e.getMessage());
+    }
+  }
+
+  // @Transactional
+  // public UserDto createUser(UserDto userDto) {
+  //   validateUniqueFields(userDto);
+  //   validateRoles(userDto);
+  //   UserDto savedUserDto = null;
+  //
+  //   if (!(userDto instanceof ClientDto)) {
+  //     // User user = userRepository.save(userMapper.toEntity(userDto));
+  //     User user =
+  //         User.builder()
+  //             .email(userDto.getEmail())
+  //             .phoneNumber(userDto.getPhoneNumber())
+  //             .fullName(userDto.getFullName())
+  //             .roles(userMapper.toEntity(userDto).getRoles())
+  //             .build();
+  //
+  //     savedUserDto = userMapper.toDto(userRepository.save(user));
+  //   } else {
+  //     savedUserDto = createClient(userDto);
+  //   }
+  //
+  //   if (savedUserDto != null) eventProducerService.sendUserCreated(savedUserDto);
+  //   return savedUserDto;
+  // }
+
+  // private UserDto createClient(UserDto userDto) {
+  //   ContactDto contactDto = createContact(userDto);
+  //   try {
+  //     // User user = userRepository.save(userMapper.toEntity(userDto));
+  //     User user =
+  //         User.builder()
+  //             .fullName(userDto.getFullName())
+  //             .email(userDto.getEmail())
+  //             .phoneNumber(userDto.getPhoneNumber())
+  //             .roles(userMapper.toEntity(userDto).getRoles())
+  //             .build();
+  //
+  //     return userMapper.toDto(userRepository.save(user));
+  //   } catch (Exception e) {
+  //     resourceFeignClient.disableContact(contactDto.getId());
+  //     throw new BusinessException("Failed to create client: " + e.getMessage());
+  //   }
+  // }
+
+  // private ContactDto createContact(UserDto userDto) {
+  //   ContactDto contactDto = clientMapper.clientToContactDto((ClientDto) userDto);
+  //   return resourceFeignClient.createContact(contactDto);
+  // }
 
   @Transactional
   public UserDto updateUser(Long userId, UserDto userDto) {
@@ -78,38 +144,101 @@ public class UserManager {
             .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
 
     boolean wasClient = isClient(userMapper.toDto(existingUser));
-    boolean isNowClient = isClient(userDto);
-    ContactDto contactBackup = null;
-    boolean contactCreated = false;
-    boolean contactDisabled = false;
+    ContactDto contactBackup = resourceFeignClient.getContactByPhone(existingUser.getPhoneNumber());
 
+    if (wasClient && contactBackup != null) {
+      resourceFeignClient.disableContact(contactBackup.getId());
+    }
+
+    existingUser.setFullName(userDto.getFullName());
+    existingUser.setEmail(userDto.getEmail());
+    existingUser.setPhoneNumber(userDto.getPhoneNumber());
+    existingUser.getRoles().clear();
+    existingUser.getRoles().addAll(userMapper.toEntity(userDto).getRoles());
+    return userMapper.toDto(userRepository.save(existingUser));
+  }
+
+  @Transactional
+  public UserDto updateUser(Long userId, ClientDto clientDto) {
+    validateUniqueFields((UserDto) clientDto);
+    validateRoles((UserDto) clientDto);
+
+    User existingUser =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
+
+    boolean wasClient = isClient(userMapper.toDto(existingUser));
+    ContactDto contactBackup = resourceFeignClient.getContactByPhone(existingUser.getPhoneNumber());
+
+    if (!wasClient && contactBackup == null) {
+      ContactDto contactDto = clientMapper.clientToContactDto(clientDto);
+      ContactDto newContact = resourceFeignClient.createContact(contactDto);
+    } else {
+      contactBackup.setPhoneNumber(clientDto.getPhoneNumber());
+      contactBackup.setFullName(clientDto.getFullName());
+      contactBackup.setOffice(clientDto.getOffice());
+      contactBackup.setBranches(clientDto.getBranches());
+      resourceFeignClient.updateContact(contactBackup.getId(), contactBackup);
+    }
     try {
-      if (wasClient && !isNowClient) {
-        contactBackup = getContactDto(existingUser.getPhoneNumber());
-        resourceFeignClient.disableContact(contactBackup.getId());
-        contactDisabled = true;
-      }
-      if (!wasClient && isNowClient) {
-        contactBackup = createContact((ClientDto) userDto);
-        contactCreated = true;
-      }
-
-      existingUser.setFullName(userDto.getFullName());
-      existingUser.setEmail(userDto.getEmail());
-      existingUser.setPhoneNumber(userDto.getPhoneNumber());
+      existingUser.setFullName(clientDto.getFullName());
+      existingUser.setEmail(clientDto.getEmail());
+      existingUser.setPhoneNumber(clientDto.getPhoneNumber());
       existingUser.getRoles().clear();
-      existingUser.getRoles().addAll(userMapper.toEntity(userDto).getRoles());
+      existingUser.getRoles().addAll(userMapper.toEntity((UserDto) clientDto).getRoles());
       return userMapper.toDto(userRepository.save(existingUser));
     } catch (Exception e) {
-      if (contactCreated) {
-        resourceFeignClient.disableContact(contactBackup.getId());
-      }
-      if (contactDisabled) {
-        resourceFeignClient.enableContact(contactBackup);
+      if (contactBackup != null) {
+        resourceFeignClient.updateContact(contactBackup.getId(), contactBackup);
       }
       throw new BusinessException("Failed to update user: " + e.getMessage());
     }
   }
+
+  // @Transactional
+  // public UserDto updateUser(Long userId, UserDto userDto) {
+  //   validateUpdatedField(userDto);
+  //   validateRoles(userDto);
+  //
+  //   User existingUser =
+  //       userRepository
+  //           .findById(userId)
+  //           .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId));
+  //
+  //   boolean wasClient = isClient(userMapper.toDto(existingUser));
+  //   boolean isNowClient = isClient(userDto);
+  //   ContactDto contactBackup = null;
+  //   boolean contactCreated = false;
+  //   boolean contactDisabled = false;
+  //
+  //   try {
+  //     if (wasClient && !isNowClient) {
+  //       contactBackup = getContactDto(existingUser.getPhoneNumber());
+  //       resourceFeignClient.disableContact(contactBackup.getId());
+  //       contactDisabled = true;
+  //     }
+  //     if (!wasClient && isNowClient) {
+  //       contactBackup = createContact((ClientDto) userDto);
+  //       contactCreated = true;
+  //     }
+  //
+  //     existingUser.setFullName(userDto.getFullName());
+  //     existingUser.setEmail(userDto.getEmail());
+  //     existingUser.setPhoneNumber(userDto.getPhoneNumber());
+  //     existingUser.getRoles().clear();
+  //     existingUser.getRoles().addAll(userMapper.toEntity(userDto).getRoles());
+  //     return userMapper.toDto(userRepository.save(existingUser));
+  //   } catch (Exception e) {
+  //     if (contactCreated) {
+  //       resourceFeignClient.disableContact(contactBackup.getId());
+  //     }
+  //     if (contactDisabled) {
+  //       resourceFeignClient.enableContact(contactBackup);
+  //     }
+  //     throw new BusinessException("Failed to update user: " + e.getMessage());
+  //   }
+  // }
 
   @Transactional
   public void disableUser(Long userId) {
@@ -129,29 +258,14 @@ public class UserManager {
       user.setEnabled(false);
       user.setDisabledAt(LocalDateTime.now());
       userRepository.save(user);
-      eventProducerService.sendUserDeleted(userId);
+      blackListService.handleUserDisabledEvent(userId);
+      // eventProducerService.sendUserDeleted(userId);
     } catch (Exception e) {
       if (wasClient && contactDto != null) {
         resourceFeignClient.enableContact(contactDto);
       }
       throw new BusinessException("Failed to disable user: " + e.getMessage());
     }
-  }
-
-  private UserDto createClient(UserDto userDto) {
-    ContactDto contactDto = createContact(userDto);
-    try {
-      User user = userRepository.save(userMapper.toEntity(userDto));
-      return userMapper.toDto(user);
-    } catch (Exception e) {
-      resourceFeignClient.disableContact(contactDto.getId());
-      throw new BusinessException("Failed to create client: " + e.getMessage());
-    }
-  }
-
-  private ContactDto createContact(UserDto userDto) {
-    ContactDto contactDto = clientMapper.clientToContactDto((ClientDto) userDto);
-    return resourceFeignClient.createContact(contactDto);
   }
 
   private ContactDto getContactDto(String userPhoneNumber) {

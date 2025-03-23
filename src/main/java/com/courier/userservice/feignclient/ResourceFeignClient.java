@@ -12,18 +12,18 @@ import com.courier.userservice.objects.dto.ContactDto;
 @FeignClient(name = "courier-resource-service", configuration = FeignClientConfig.class)
 public interface ResourceFeignClient {
 
-  @PostMapping("/api/courier/resource/contact")
+  @PostMapping("/api/resource/contact")
   ContactDto createContact(@RequestBody ContactDto contactDto);
 
-  @PostMapping("/api/courier/resource/contact/{id}")
+  @PostMapping("/api/resource/contact/{id}")
   ContactDto updateContact(@PathVariable Long id, @RequestBody ContactDto contactDto);
 
-  @DeleteMapping("/api/courier/resource/contact/{id}")
+  @DeleteMapping("/api/resource/contact/{id}")
   void disableContact(@PathVariable Long id);
 
-  @PostMapping("/api/courier/resource/contact/enable")
+  @PostMapping("/api/resource/contact/enable")
   ContactDto enableContact(@RequestBody ContactDto contactDto);
 
-  @GetMapping("/api/courier/resource/contact/phone/{phoneNumber}")
+  @GetMapping("/api/resource/contact/phone/{phoneNumber}")
   ContactDto getContactByPhone(@PathVariable String phoneNumber);
 }
