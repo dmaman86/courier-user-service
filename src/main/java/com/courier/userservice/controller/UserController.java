@@ -24,6 +24,7 @@ import com.courier.userservice.objects.dto.ClientDto;
 import com.courier.userservice.objects.dto.ContactDto;
 import com.courier.userservice.objects.dto.UserDto;
 import com.courier.userservice.objects.mappers.ClientMapper;
+import com.courier.userservice.objects.request.UserSearchRequest;
 import com.courier.userservice.service.UserService;
 
 @RestController
@@ -119,5 +120,15 @@ public class UserController {
             && dto.getRoles().stream().anyMatch(r -> r.getName().equals("ROLE_CLIENT"));
 
     return hasOfficeAndBranches && hasClientRole;
+  }
+
+  @PostMapping("/advanced-search")
+  public ResponseEntity<Page<UserDto>> advancedSearch(
+      @RequestBody UserSearchRequest request,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "10") int size) {
+
+    logger.info("Advanced search request: {}", request);
+    return ResponseEntity.ok(userService.advancedSearch(request, page, size));
   }
 }

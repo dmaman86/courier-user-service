@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import com.courier.userservice.objects.dto.ClientDto;
 import com.courier.userservice.objects.dto.ContactDto;
 import com.courier.userservice.objects.dto.UserDto;
+import com.courier.userservice.objects.request.UserSearchRequest;
 
 public interface UserService {
 
@@ -32,4 +33,6 @@ public interface UserService {
   void disableUser(Long id);
 
   Page<UserDto> searchUsers(String search, Pageable pageable);
+
+  Page<UserDto> advancedSearch(UserSearchRequest request, int page, int size);
 }

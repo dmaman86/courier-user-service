@@ -1,9 +1,13 @@
 package com.courier.userservice.objects.criteria;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.data.jpa.domain.Specification;
 
 import com.courier.userservice.objects.entity.Role;
 import com.courier.userservice.objects.entity.User;
+import com.courier.userservice.objects.request.UserSearchRequest;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -35,6 +39,45 @@ public class UserCriteria {
       return cb.and(
           enabledPredicate,
           cb.or(fullNamePredicate, emailPredicate, phonePredicate, rolePredicate));
+    };
+  }
+
+  public static Specification<User> advancedSearch(
+      UserSearchRequest request, List<String> clientPhoneNumbers) {
+    return (root, query, cb) -> {
+      List<Predicate> predicates = new ArrayList<>();
+
+      predicates.add(cb.isTrue(root.get("enabled")));
+
+      if (request.getFullName() != null) {
+        predicates.add(
+            cb.like(
+                cb.lower(root.get("fullName")), "%" + request.getFullName().toLowerCase() + "%"));
+      }
+      if (request.getEmail() != null) {
+        predicates.add(
+            cb.like(cb.lower(root.get("email")), "%" + request.getEmail().toLowerCase() + "%"));
+      }
+
+      if (request.getPhoneNumber() != null) {
+        predicates.add(
+            cb.like(
+                cb.lower(root.get("phoneNumber")),
+                "%" + request.getPhoneNumber().toLowerCase() + "%"));
+      }
+
+      if (request.getRoles() != null && !request.getRoles().isEmpty()) {
+        Join<User, Role> rolesJoin = root.join("roles");
+        CriteriaBuilder.In<String> in = cb.in(rolesJoin.get("name"));
+        request.getRoles().forEach(role -> in.value(role.getName()));
+        predicates.add(in);
+      }
+
+      if (clientPhoneNumbers != null && !clientPhoneNumbers.isEmpty()) {
+        predicates.add(root.get("phoneNumber").in(clientPhoneNumbers));
+      }
+
+      return cb.and(predicates.toArray(new Predicate[0]));
     };
   }
 }
